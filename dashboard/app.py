@@ -85,8 +85,9 @@ st.markdown(
 
     .kpi-label {
         font-size: 13px;
-        color: #6b7280;
+        color: #374151;
         margin-top: 5px;
+        font-weight: 700;
     }
 
     .kpi-value {
@@ -104,10 +105,10 @@ st.markdown(
     }
 
     .panel-title {
-        font-size: 20px;
+        font-size: 22px;
         font-weight: 800;
-        margin-bottom: 12px;
-        color: #111827;
+        margin-bottom: 14px;
+        color: #2563eb;
     }
 
     .vehicle-card {
