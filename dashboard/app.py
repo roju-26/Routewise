@@ -1,6 +1,23 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
+import sys
+import os
+
+# Add Routewise project folder to Python path
+sys.path.append(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.abspath(__file__)
+        )
+    )
+)
+
+from prediction.risk import get_risk_data
+from prediction.critical import get_critical_data
+from prediction.exceptions import get_exception_data
+from prediction.fallback import get_fallback_data
+from optimization.optimizer import get_optimization_results
 
 # --------------------------------------------------
 # PAGE CONFIG
@@ -149,16 +166,36 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --------------------------------------------------
-# DUMMY DATA
-# --------------------------------------------------
+# ============================================================
+# REAL ROUTEWISE DATA
+# ============================================================
 
-total_orders = 30
-total_vehicles = 4
-baseline_distance = 50.0
-optimized_distance = 36.2
-high_risk_deliveries = 2
+orders_df = pd.read_csv("data/orders.csv")
+vehicles_df = pd.read_csv("data/vehicles.csv")
 
+risk_df = get_risk_data()
+critical_df = get_critical_data()
+exception_df = get_exception_data()
+fallback_df = get_fallback_data()
+
+optimization_results = get_optimization_results()
+
+optimized_distance = optimization_results["total_distance"]
+total_deliveries = optimization_results["total_deliveries"]
+total_on_time = optimization_results["on_time"]
+total_late = optimization_results["late"]
+route_results = optimization_results["routes"]
+
+
+total_orders = len(orders_df)
+total_vehicles = len(vehicles_df)
+
+high_risk_deliveries = (
+    risk_df["risk_level"] == "High"
+).sum()
+
+# Temporary baseline for optimization comparison
+baseline_distance = 200.0
 distance_saved = baseline_distance - optimized_distance
 improvement = (distance_saved / baseline_distance) * 100
 
@@ -249,29 +286,70 @@ with left:
         unsafe_allow_html=True
     )
 
-    locations = {
-        "Depot": (0, 0),
-        "Order 1": (2, 3),
-        "Order 2": (5, 2),
-        "Order 3": (7, 5),
-        "Order 4": (4, 7),
-    }
+        # Get routes from the real optimizer
+    if len(route_results) > 0:
 
-    route = [
-        "Depot",
-        "Order 1",
-        "Order 2",
-        "Order 3",
-        "Order 4",
-        "Depot"
-    ]
+        vehicle_options = [
+            r["vehicle_id"]
+            for r in route_results
+        ]
+
+        selected_vehicle = st.selectbox(
+            "Select Vehicle",
+            vehicle_options
+        )
+
+        selected_route = next(
+            r for r in route_results
+            if r["vehicle_id"] == selected_vehicle
+        )
+
+        route = selected_route["route"]
+        # Remove consecutive duplicate Depot entries
+        clean_route = []
+
+        for point in route:
+            if not clean_route or point != clean_route[-1]:
+                clean_route.append(point)
+
+        route = clean_route
+
+        # Create locations from actual orders
+        locations = {
+            "Depot": (0, 0)
+        }
+
+        for _, row in orders_df.iterrows():
+            locations[row["order_id"]] = (
+                row["x"],
+                row["y"]
+            )
+
+    else:
+        st.warning("No optimized routes available.")
+        route = ["Depot"]
+        locations = {"Depot": (0, 0)}
 
     x_vals = []
     y_vals = []
     labels = []
 
     for point in route:
-        x, y = locations[point]
+
+        if point == "Depot":
+            x, y = 0, 0
+
+        else:
+            order = orders_df[
+            orders_df["order_id"] == point
+        ]
+
+            if len(order) == 0:
+                continue
+
+            x = order.iloc[0]["x"]
+            y = order.iloc[0]["y"]
+
         x_vals.append(x)
         y_vals.append(y)
         labels.append(point)
@@ -315,12 +393,27 @@ with right:
         unsafe_allow_html=True
     )
 
-    fleet = [
-        ("Vehicle 1", "2 orders assigned", "🟢 Active"),
-        ("Vehicle 2", "1 order assigned", "🟠 Near capacity"),
-        ("Vehicle 3", "1 order assigned", "🟢 Active"),
-        ("Vehicle 4", "No orders assigned", "⚪ Idle"),
-    ]
+    fleet = []
+
+    for r in route_results:
+
+        order_count = sum(
+            1 for p in r["route"]
+            if p != "Depot"
+        )
+
+        if order_count == 0:
+            status = "⚪ Idle"
+        else:
+            status = "🟢 Active"
+
+        fleet.append(
+            (
+                r["vehicle_id"],
+                f"{order_count} orders assigned",
+                status
+            )
+        )
 
     for name, detail, status in fleet:
         st.markdown(
@@ -395,11 +488,53 @@ with alert_col:
         unsafe_allow_html=True
     )
 
-    st.error("🔴 Order 3 — High late-delivery risk: 91")
-    st.warning("🟠 Order 2 — Medium late-delivery risk: 72")
-    st.warning("⚠️ Vehicle 2 is approaching capacity limit")
-    st.warning("⏰ Order 2 delivery window may be at risk")
+    # ============================================================
+# REAL ATTENTION ALERTS
+# ============================================================
 
+    high_risk_orders = risk_df[
+        risk_df["risk_level"] == "High"
+    ].sort_values(
+        "risk_score",
+        ascending=False
+    )
+
+    critical_orders = critical_df[
+        critical_df["critical"] == True
+    ]
+
+    exception_orders = exception_df[
+        exception_df["exception"] == True
+    ]
+
+# High-risk delivery alerts
+    for _, row in high_risk_orders.head(3).iterrows():
+        st.error(
+            f"🔴 {row['order_id']} — "
+            f"High late-delivery risk: {row['risk_score']:.2f}"
+    )
+
+# Critical delivery alerts
+    for _, row in critical_orders.head(2).iterrows():
+        st.warning(
+            f"⚠️ {row['order_id']} — "
+            f"Critical delivery: {row['critical_reason']}"
+    )
+
+# Exception alerts
+    for _, row in exception_orders.head(2).iterrows():
+        st.warning(
+            f"🚨 {row['order_id']} — "
+            f"Exception: {row['exception_reason']}"
+    )
+
+# No issues
+    if (
+        len(high_risk_orders) == 0
+        and len(critical_orders) == 0
+        and len(exception_orders) == 0
+    ):
+        st.success("✅ No immediate attention required.")
 # --------------------------------------------------
 # RISK TABLE
 # --------------------------------------------------
@@ -411,37 +546,34 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-risk_df = pd.DataFrame(
-    {
-        "Order": [
-            "Order 3",
-            "Order 2",
-            "Order 4",
-            "Order 1"
-        ],
-        "Vehicle": [
-            "Vehicle 2",
-            "Vehicle 1",
-            "Vehicle 3",
-            "Vehicle 1"
-        ],
-        "Risk Score": [
-            91,
-            72,
-            45,
-            25
-        ],
-        "Risk Level": [
-            "High",
-            "Medium",
-            "Medium",
-            "Low"
-        ]
+# Use real risk prediction data
+risk_display_df = risk_df.copy()
+
+risk_display_df = risk_display_df.sort_values(
+    "risk_score",
+    ascending=False
+)
+
+risk_display_df = risk_display_df[
+    [
+        "order_id",
+        "risk_score",
+        "risk_level"
+    ]
+]
+
+risk_display_df = risk_display_df.rename(
+    columns={
+        "order_id": "Order",
+        "risk_score": "Risk Score",
+        "risk_level": "Risk Level"
     }
 )
 
+
+
 st.dataframe(
-    risk_df,
+    risk_display_df,
     use_container_width=True,
     hide_index=True,
     column_config={
@@ -468,10 +600,43 @@ with rec_col:
         unsafe_allow_html=True
     )
 
-    st.info(
-        "Prioritize Order 3 before dispatch. "
-        "Review Vehicle 2 capacity and monitor Order 2's "
-        "delivery window closely."
+    # ============================================================
+# REAL RECOMMENDATION
+# ============================================================
+
+    if len(high_risk_orders) > 0:
+
+        top_risk = high_risk_orders.iloc[0]
+
+        st.info(
+        f"🔴 Prioritize {top_risk['order_id']} before dispatch. "
+        f"Risk score: {top_risk['risk_score']:.2f} "
+        f"({top_risk['risk_level']} risk)."
+    )
+
+    elif len(exception_orders) > 0:
+
+        top_exception = exception_orders.iloc[0]
+
+        st.info(
+        f"🚨 Review {top_exception['order_id']} before dispatch. "
+        f"Reason: {top_exception['exception_reason']}."
+    )
+
+    elif len(critical_orders) > 0:
+
+        top_critical = critical_orders.iloc[0]
+
+        st.info(
+        f"⚠️ Prioritize {top_critical['order_id']} "
+        f"because it is a critical delivery. "
+        f"Reason: {top_critical['critical_reason']}."
+    )
+
+    else:
+
+        st.success(
+        "✅ No immediate delivery action is required."
     )
 
 with summary_col:
@@ -495,5 +660,5 @@ st.caption(
 )
 
 st.caption(
-    "Dashboard currently uses sample data for UI development."
+    "RouteWise • Live project data from orders, vehicles, risk, and optimizer modules."
 )

@@ -238,6 +238,7 @@ if solution:
     print("\n========== OPTIMIZED ROUTES ==========")
 
     total_optimized_distance = 0
+    route_results = []
     total_deliveries = 0
     total_on_time = 0
     total_late = 0
@@ -307,9 +308,16 @@ if solution:
                 vehicle_id
             ) / 100
 
-        route.append("Depot")
+            route.append("Depot")
 
         total_optimized_distance += route_distance
+
+        route_results.append({
+            "vehicle_id": f"V{vehicle_id + 1:03d}",
+            "route": route,
+            "load": route_load,
+            "distance": route_distance
+        })
 
         print(
             f"   Load: {route_load} kg"
@@ -355,3 +363,25 @@ if solution:
 else:
 
     print("\nNo feasible optimized solution found.")
+    # ============================================================
+# RETURN OPTIMIZATION RESULTS FOR DASHBOARD
+# ============================================================
+
+def get_optimization_results():
+
+    if not solution:
+        return {
+            "routes": [],
+            "total_distance": 0,
+            "total_deliveries": 0,
+            "on_time": 0,
+            "late": 0
+        }
+
+    return {
+        "routes": route_results,
+        "total_distance": total_optimized_distance,
+        "total_deliveries": total_deliveries,
+        "on_time": total_on_time,
+        "late": total_late
+    }

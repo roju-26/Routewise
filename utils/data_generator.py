@@ -19,15 +19,22 @@ orders = []
 
 for i in range(1, num_orders + 1):
     order = {
-        "order_id": f"O{i:03d}",
-        "x": np.random.randint(1, 21),
-        "y": np.random.randint(1, 21),
-        "weight": np.random.randint(1, 11),
-        "priority": np.random.choice(["Low", "Medium", "High"]),
-        "ready_time": np.random.randint(480, 600),
-        "due_time": np.random.randint(660, 900),
-        "service_time": np.random.randint(5, 15)
-    }
+    "order_id": f"O{i:03d}",
+    "x": np.random.randint(1, 21),
+    "y": np.random.randint(1, 21),
+    "weight": np.random.randint(1, 11),
+    "priority": np.random.choice(
+        ["Low", "Medium", "High"]
+    ),
+    "ready_time": np.random.randint(480, 600),
+    "due_time": np.random.randint(660, 900),
+    "service_time": np.random.randint(5, 15),
+
+    # Historical percentage of late deliveries
+    "historical_late_rate": round(
+        np.random.uniform(0.05, 0.40), 2
+    )
+}
 
     orders.append(order)
 
