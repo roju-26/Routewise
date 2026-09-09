@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import sys
 import os
+import importlib
 
 # Add Routewise project folder to Python path
 sys.path.append(
@@ -18,6 +19,7 @@ from prediction.critical import get_critical_data
 from prediction.exceptions import get_exception_data
 from prediction.fallback import get_fallback_data
 from optimization.optimizer import get_optimization_results
+from utils.data_generator import generate_data
 
 # --------------------------------------------------
 # PAGE CONFIG
@@ -170,6 +172,62 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# ============================================================
+# DELIVERY INPUT
+# ============================================================
+
+st.sidebar.header("🚚 Delivery Scenario")
+
+num_orders = st.sidebar.number_input(
+    "Number of Orders",
+    min_value=1,
+    max_value=200,
+    value=30,
+    step=1
+)
+
+num_vehicles = st.sidebar.number_input(
+    "Number of Vehicles",
+    min_value=1,
+    max_value=50,
+    value=4,
+    step=1
+)
+
+st.sidebar.info(
+    "Enter the number of orders and vehicles for this delivery scenario."
+)
+
+generate_button = st.sidebar.button("Generate Scenario")
+
+if generate_button:
+
+    generate_data(
+        num_orders=num_orders,
+        num_vehicles=num_vehicles
+    )
+
+    # Refresh prediction modules
+    import prediction.risk as risk_module
+    import prediction.critical as critical_module
+    import prediction.exceptions as exception_module
+    import prediction.fallback as fallback_module
+
+    importlib.reload(risk_module)
+    importlib.reload(critical_module)
+    importlib.reload(exception_module)
+    importlib.reload(fallback_module)
+
+    # Refresh optimizer with new CSV data
+    import optimization.optimizer as optimizer_module
+    importlib.reload(optimizer_module)
+
+    st.success(
+        f"Generated {num_orders} orders and "
+        f"{num_vehicles} vehicles."
+    )
+
+    st.rerun()
 # ============================================================
 # REAL ROUTEWISE DATA
 # ============================================================
