@@ -105,10 +105,13 @@ st.markdown(
     }
 
     .panel-title {
-        font-size: 22px;
+        font-size: 20px;
         font-weight: 800;
-        margin-bottom: 14px;
-        color: #2563eb;
+        margin-bottom: 12px;
+        color: #0f172a;
+        background: #eaf2ff;
+        padding: 12px 16px;
+        border-radius: 10px;
     }
 
     .vehicle-card {
